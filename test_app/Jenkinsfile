@@ -1,0 +1,29 @@
+pipeline {
+  agent any
+  environment {
+    NODE_ENV = 'test'
+  }
+  stages {
+    stage('Checkout') {
+      steps {
+        git 'https://github.com/tu_usuario/tu_repositorio.git'
+      }
+    }
+    stage('Install') {
+      steps {
+        sh 'npm install'
+      }
+    }
+    stage('Test') {
+      steps {
+        sh 'npm test'
+      }
+    }
+    stage('Build Docker') {
+      steps {
+        sh 'docker build -t clima-app .'
+      }
+    }
+    // Puedes agregar más stages para push o deploy
+  }
+}
