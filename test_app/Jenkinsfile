@@ -1,12 +1,10 @@
 pipeline {
   agent any
-  environment {
-    NODE_ENV = 'test'
-  }
   stages {
     stage('Checkout') {
       steps {
-        git 'https://github.com/tu_usuario/tu_repositorio.git'
+        // Clona tu repositorio de GitHub
+        git 'https://github.com/Uraken4/Proyecto_Clima.git'
       }
     }
     stage('Install') {
@@ -21,9 +19,9 @@ pipeline {
     }
     stage('Build Docker') {
       steps {
-        sh 'docker build -t clima-app .'
+        sh 'docker build -t proyecto_clima .'
       }
     }
-    // Puedes agregar más stages para push o deploy
+    // Puedes agregar más stages para push o deploy si lo necesitas
   }
 }
