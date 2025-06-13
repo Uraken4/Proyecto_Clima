@@ -1,6 +1,11 @@
 pipeline {
   agent any
   stages {
+    stage('Clean Workspace') {
+      steps {
+        cleanWs()
+      }
+    }
     stage('Install') {
       agent {
         docker { image 'node:18-alpine' }
