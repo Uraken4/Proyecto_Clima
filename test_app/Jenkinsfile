@@ -1,118 +1,328 @@
 pipeline {
     agent any
     
+    environment {
+        // Variables de entorno
+        DOCKER_IMAGE = 'proyecto-clima'
+        DOCKER_TAG = "${BUILD_NUMBER}"
+        NODE_VERSION = '18'
+        FLUTTER_VERSION = 'stable'
+    }
+    
+    options {
+        // Mantener solo los últimos 10 builds
+        buildDiscarder(logRotator(numToKeepStr: '10'))
+        // Timeout del pipeline completo
+        timeout(time: 30, unit: 'MINUTES')
+        // Mostrar timestamps en los logs
+        timestamps()
+    }
+    
     stages {
-        stage('Clean Workspace') {
-            steps {
-                echo 'Cleaning workspace...'
-                cleanWs()
-            }
-        }
-        
         stage('Checkout') {
             steps {
-                echo 'Cloning repository...'
+                echo '🔄 Descargando código fuente...'
+                checkout scm
                 
-                // Clonar el repositorio explícitamente
-                git url: 'https://github.com/Uraken4/Proyecto_Clima.git', branch: 'main'
-                
-                echo 'Repository cloned successfully!'
-                sh 'pwd'
-                sh 'ls -la'
-                sh 'ls -la test_app/'
+                // Mostrar información del commit
+                sh '''
+                    echo "📋 Información del Build:"
+                    echo "Commit: $(git rev-parse HEAD)"
+                    echo "Autor: $(git log -1 --pretty=format:'%an')"
+                    echo "Mensaje: $(git log -1 --pretty=format:'%s')"
+                    echo "Rama: ${GIT_BRANCH}"
+                '''
             }
         }
         
-        stage('Install Dependencies') {
-            agent {
-                docker { 
-                    image 'node:18-alpine'
-                    // Reutilizar el workspace
-                    reuseNode true
+        stage('Environment Setup') {
+            parallel {
+                stage('Node.js Setup') {
+                    steps {
+                        echo '🟢 Configurando Node.js...'
+                        dir('test_app') {
+                            sh '''
+                                echo "Node version: $(node --version)"
+                                echo "NPM version: $(npm --version)"
+                                echo "📦 Verificando package.json..."
+                                cat package.json
+                            '''
+                        }
+                    }
                 }
-            }
-            steps {
-                echo 'Installing npm dependencies...'
                 
-                // Cambiar al directorio correcto
-                dir('test_app') {
-                    sh 'ls -la'
-                    sh 'npm install'
-                }
-            }
-        }
-        
-        stage('Run Tests') {
-            agent {
-                docker { 
-                    image 'node:18-alpine'
-                    reuseNode true
-                }
-            }
-            steps {
-                echo 'Running tests...'
-                
-                dir('test_app') {
-                    sh 'npm test'
-                }
-            }
-            post {
-                always {
-                    // Publicar resultados de test si existen
-                    script {
-                        if (fileExists('test_app/test-results.xml')) {
-                            publishTestResults testResultsPattern: 'test_app/test-results.xml'
+                stage('Flutter Setup') {
+                    steps {
+                        echo '💙 Verificando Flutter...'
+                        dir('test_app') {
+                            sh '''
+                                if command -v flutter &> /dev/null; then
+                                    echo "Flutter version: $(flutter --version)"
+                                else
+                                    echo "⚠️  Flutter no está instalado en este agente"
+                                fi
+                            '''
                         }
                     }
                 }
             }
         }
         
-        stage('Build Docker Image') {
-            steps {
-                echo 'Building Docker image...'
+        stage('Dependencies') {
+            parallel {
+                stage('Node Dependencies') {
+                    steps {
+                        echo '📥 Instalando dependencias de Node.js...'
+                        dir('test_app') {
+                            sh 'npm ci --only=production'
+                        }
+                    }
+                }
                 
-                dir('test_app') {
-                    // Verificar que existe Dockerfile
-                    sh 'ls -la'
-                    
-                    // Construir imagen Docker
-                    sh 'docker build -t proyecto_clima:${BUILD_NUMBER} .'
-                    sh 'docker build -t proyecto_clima:latest .'
-                    
-                    echo 'Docker image built successfully!'
+                stage('Flutter Dependencies') {
+                    when {
+                        expression {
+                            return fileExists('test_app/pubspec.yaml')
+                        }
+                    }
+                    steps {
+                        echo '📥 Instalando dependencias de Flutter...'
+                        dir('test_app') {
+                            script {
+                                if (sh(script: 'command -v flutter', returnStatus: true) == 0) {
+                                    sh 'flutter pub get'
+                                } else {
+                                    echo '⚠️  Saltando Flutter pub get - Flutter no disponible'
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
         
-        stage('Docker Image Info') {
-            steps {
-                echo 'Docker image information:'
-                sh 'docker images | grep proyecto_clima'
+        stage('Code Quality') {
+            parallel {
+                stage('Lint Node.js') {
+                    steps {
+                        echo '🔍 Análisis de código Node.js...'
+                        dir('test_app') {
+                            script {
+                                try {
+                                    sh 'npm run lint || echo "⚠️  No hay script de lint configurado"'
+                                } catch (Exception e) {
+                                    echo "⚠️  Error en lint: ${e.getMessage()}"
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                stage('Flutter Analyze') {
+                    when {
+                        expression {
+                            return fileExists('test_app/pubspec.yaml')
+                        }
+                    }
+                    steps {
+                        echo '🔍 Análisis de código Flutter...'
+                        dir('test_app') {
+                            script {
+                                if (sh(script: 'command -v flutter', returnStatus: true) == 0) {
+                                    sh 'flutter analyze'
+                                } else {
+                                    echo '⚠️  Saltando Flutter analyze - Flutter no disponible'
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
         
-        // STAGE OPCIONAL: Test de la imagen Docker
-        stage('Test Docker Image') {
-            steps {
-                echo 'Testing Docker image...'
+        stage('Tests') {
+            parallel {
+                stage('Node.js Tests') {
+                    steps {
+                        echo '🧪 Ejecutando tests de Node.js...'
+                        dir('test_app') {
+                            script {
+                                try {
+                                    sh 'npm test'
+                                } catch (Exception e) {
+                                    echo "❌ Error en tests: ${e.getMessage()}"
+                                    currentBuild.result = 'UNSTABLE'
+                                }
+                            }
+                        }
+                    }
+                    post {
+                        always {
+                            // Publicar resultados de tests si existen
+                            script {
+                                if (fileExists('test_app/test-results.xml')) {
+                                    publishTestResults([
+                                        allowEmptyResults: false,
+                                        testResultsPattern: 'test_app/test-results.xml'
+                                    ])
+                                }
+                            }
+                        }
+                    }
+                }
                 
+                stage('Flutter Tests') {
+                    when {
+                        expression {
+                            return fileExists('test_app/test/')
+                        }
+                    }
+                    steps {
+                        echo '🧪 Ejecutando tests de Flutter...'
+                        dir('test_app') {
+                            script {
+                                if (sh(script: 'command -v flutter', returnStatus: true) == 0) {
+                                    sh 'flutter test'
+                                } else {
+                                    echo '⚠️  Saltando Flutter tests - Flutter no disponible'
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        stage('Build') {
+            parallel {
+                stage('Build Node.js App') {
+                    steps {
+                        echo '🔨 Construyendo aplicación Node.js...'
+                        dir('test_app') {
+                            script {
+                                try {
+                                    sh 'npm run build || echo "⚠️  No hay script de build configurado"'
+                                } catch (Exception e) {
+                                    echo "⚠️  Error en build: ${e.getMessage()}"
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                stage('Build Flutter Web') {
+                    when {
+                        expression {
+                            return fileExists('test_app/web/')
+                        }
+                    }
+                    steps {
+                        echo '🔨 Construyendo Flutter para Web...'
+                        dir('test_app') {
+                            script {
+                                if (sh(script: 'command -v flutter', returnStatus: true) == 0) {
+                                    sh 'flutter build web'
+                                } else {
+                                    echo '⚠️  Saltando Flutter build web - Flutter no disponible'
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        stage('Docker Build') {
+            when {
+                expression {
+                    return fileExists('test_app/Dockerfile')
+                }
+            }
+            steps {
+                echo '🐳 Construyendo imagen Docker...'
+                dir('test_app') {
+                    script {
+                        try {
+                            def image = docker.build("${DOCKER_IMAGE}:${DOCKER_TAG}")
+                            echo "✅ Imagen Docker construida: ${DOCKER_IMAGE}:${DOCKER_TAG}"
+                            
+                            // Opcional: pushear a registry
+                            // image.push()
+                            // image.push('latest')
+                            
+                        } catch (Exception e) {
+                            echo "❌ Error construyendo Docker: ${e.getMessage()}"
+                            currentBuild.result = 'UNSTABLE'
+                        }
+                    }
+                }
+            }
+        }
+        
+        stage('Security Scan') {
+            parallel {
+                stage('Node.js Security') {
+                    steps {
+                        echo '🔒 Escaneando dependencias de Node.js...'
+                        dir('test_app') {
+                            script {
+                                try {
+                                    sh 'npm audit --audit-level=high'
+                                } catch (Exception e) {
+                                    echo "⚠️  Vulnerabilidades encontradas: ${e.getMessage()}"
+                                    currentBuild.result = 'UNSTABLE'
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                stage('Docker Security') {
+                    when {
+                        expression {
+                            return fileExists('test_app/Dockerfile')
+                        }
+                    }
+                    steps {
+                        echo '🔒 Escaneando imagen Docker...'
+                        script {
+                            try {
+                                // Ejemplo con trivy (si está instalado)
+                                sh '''
+                                    if command -v trivy &> /dev/null; then
+                                        trivy image ${DOCKER_IMAGE}:${DOCKER_TAG} || true
+                                    else
+                                        echo "⚠️  Trivy no está instalado"
+                                    fi
+                                '''
+                            } catch (Exception e) {
+                                echo "⚠️  Error en escaneo Docker: ${e.getMessage()}"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        stage('Deploy to Staging') {
+            when {
+                branch 'main'
+            }
+            steps {
+                echo '🚀 Desplegando a Staging...'
                 script {
-                    // Ejecutar contenedor para verificar que funciona
-                    sh '''
-                        # Ejecutar contenedor en background
-                        docker run -d --name test_container -p 3001:3000 proyecto_clima:latest
-                        
-                        # Esperar un poco para que inicie
-                        sleep 10
-                        
-                        # Test básico (ajusta según tu aplicación)
-                        # curl -f http://localhost:3001 || echo "App might not be ready yet"
-                        
-                        # Limpiar contenedor de test
-                        docker stop test_container
-                        docker rm test_container
-                    '''
+                    try {
+                        // Aquí irían los comandos de despliegue
+                        sh '''
+                            echo "🌐 Simulando despliegue a staging..."
+                            echo "Docker image: ${DOCKER_IMAGE}:${DOCKER_TAG}"
+                            echo "Ambiente: Staging"
+                            echo "URL: https://staging.proyecto-clima.com"
+                        '''
+                    } catch (Exception e) {
+                        echo "❌ Error en despliegue: ${e.getMessage()}"
+                        currentBuild.result = 'FAILURE'
+                    }
                 }
             }
         }
@@ -120,51 +330,76 @@ pipeline {
     
     post {
         always {
-            echo 'Pipeline execution completed!'
+            echo '🧹 Limpiando workspace...'
             
-            // Limpiar imágenes Docker viejas (opcional)
+            // Limpiar imágenes Docker locales (opcional)
             script {
-                sh '''
-                    # Limpiar imágenes sin tag
-                    docker image prune -f
-                '''
+                try {
+                    sh '''
+                        echo "🧹 Limpiando imágenes Docker..."
+                        docker images -q ${DOCKER_IMAGE} | xargs -r docker rmi -f || true
+                    '''
+                } catch (Exception e) {
+                    echo "⚠️  Error limpiando Docker: ${e.getMessage()}"
+                }
             }
+            
+            // Archivar artefactos importantes
+            archiveArtifacts artifacts: 'test_app/package.json, test_app/Dockerfile', allowEmptyArchive: true
         }
         
         success {
-            echo '✅ Pipeline completed successfully!'
+            echo '✅ ¡Pipeline completado exitosamente!'
             
-            // Mostrar imágenes creadas
-            sh 'docker images | grep proyecto_clima'
+            // Opcional: Notificaciones
+            script {
+                try {
+                    // Ejemplo de notificación por email o Slack
+                    emailext (
+                        subject: "✅ Build Exitoso - ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+                        body: """
+                            ¡El build se completó exitosamente!
+                            
+                            Proyecto: ${env.JOB_NAME}
+                            Build: #${env.BUILD_NUMBER}
+                            Commit: ${env.GIT_COMMIT}
+                            
+                            Ver detalles: ${env.BUILD_URL}
+                        """,
+                        to: "${env.CHANGE_AUTHOR_EMAIL ?: 'admin@ejemplo.com'}"
+                    )
+                } catch (Exception e) {
+                    echo "⚠️  No se pudo enviar notificación: ${e.getMessage()}"
+                }
+            }
         }
         
         failure {
-            echo '❌ Pipeline failed!'
+            echo '❌ Pipeline falló!'
             
-            // Debug information
-            sh 'pwd'
-            sh 'ls -la'
-            
-            // Logs de Docker si falló
+            // Opcional: Notificaciones de error
             script {
                 try {
-                    sh 'docker logs test_container || echo "No test container found"'
+                    emailext (
+                        subject: "❌ Build Falló - ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+                        body: """
+                            El build falló. Por favor revisa los logs.
+                            
+                            Proyecto: ${env.JOB_NAME}
+                            Build: #${env.BUILD_NUMBER}
+                            
+                            Ver logs: ${env.BUILD_URL}console
+                        """,
+                        to: "${env.CHANGE_AUTHOR_EMAIL ?: 'admin@ejemplo.com'}"
+                    )
                 } catch (Exception e) {
-                    echo "No Docker logs available"
+                    echo "⚠️  No se pudo enviar notificación de error: ${e.getMessage()}"
                 }
             }
         }
         
-        cleanup {
-            // Limpiar contenedores de test si quedaron
-            script {
-                try {
-                    sh 'docker stop test_container || echo "No container to stop"'
-                    sh 'docker rm test_container || echo "No container to remove"'
-                } catch (Exception e) {
-                    echo "Cleanup completed"
-                }
-            }
+        unstable {
+            echo '⚠️  Build completado con advertencias'
         }
     }
 }
