@@ -1,0 +1,170 @@
+pipeline {
+    agent any
+    
+    stages {
+        stage('Clean Workspace') {
+            steps {
+                echo 'Cleaning workspace...'
+                cleanWs()
+            }
+        }
+        
+        stage('Checkout') {
+            steps {
+                echo 'Cloning repository...'
+                
+                // Clonar el repositorio explícitamente
+                git url: 'https://github.com/Uraken4/Proyecto_Clima.git', branch: 'main'
+                
+                echo 'Repository cloned successfully!'
+                sh 'pwd'
+                sh 'ls -la'
+                sh 'ls -la test_app/'
+            }
+        }
+        
+        stage('Install Dependencies') {
+            agent {
+                docker { 
+                    image 'node:18-alpine'
+                    // Reutilizar el workspace
+                    reuseNode true
+                }
+            }
+            steps {
+                echo 'Installing npm dependencies...'
+                
+                // Cambiar al directorio correcto
+                dir('test_app') {
+                    sh 'ls -la'
+                    sh 'npm install'
+                }
+            }
+        }
+        
+        stage('Run Tests') {
+            agent {
+                docker { 
+                    image 'node:18-alpine'
+                    reuseNode true
+                }
+            }
+            steps {
+                echo 'Running tests...'
+                
+                dir('test_app') {
+                    sh 'npm test'
+                }
+            }
+            post {
+                always {
+                    // Publicar resultados de test si existen
+                    script {
+                        if (fileExists('test_app/test-results.xml')) {
+                            publishTestResults testResultsPattern: 'test_app/test-results.xml'
+                        }
+                    }
+                }
+            }
+        }
+        
+        stage('Build Docker Image') {
+            steps {
+                echo 'Building Docker image...'
+                
+                dir('test_app') {
+                    // Verificar que existe Dockerfile
+                    sh 'ls -la'
+                    
+                    // Construir imagen Docker
+                    sh 'docker build -t proyecto_clima:${BUILD_NUMBER} .'
+                    sh 'docker build -t proyecto_clima:latest .'
+                    
+                    echo 'Docker image built successfully!'
+                }
+            }
+        }
+        
+        stage('Docker Image Info') {
+            steps {
+                echo 'Docker image information:'
+                sh 'docker images | grep proyecto_clima'
+            }
+        }
+        
+        // STAGE OPCIONAL: Test de la imagen Docker
+        stage('Test Docker Image') {
+            steps {
+                echo 'Testing Docker image...'
+                
+                script {
+                    // Ejecutar contenedor para verificar que funciona
+                    sh '''
+                        # Ejecutar contenedor en background
+                        docker run -d --name test_container -p 3001:3000 proyecto_clima:latest
+                        
+                        # Esperar un poco para que inicie
+                        sleep 10
+                        
+                        # Test básico (ajusta según tu aplicación)
+                        # curl -f http://localhost:3001 || echo "App might not be ready yet"
+                        
+                        # Limpiar contenedor de test
+                        docker stop test_container
+                        docker rm test_container
+                    '''
+                }
+            }
+        }
+    }
+    
+    post {
+        always {
+            echo 'Pipeline execution completed!'
+            
+            // Limpiar imágenes Docker viejas (opcional)
+            script {
+                sh '''
+                    # Limpiar imágenes sin tag
+                    docker image prune -f
+                '''
+            }
+        }
+        
+        success {
+            echo '✅ Pipeline completed successfully!'
+            
+            // Mostrar imágenes creadas
+            sh 'docker images | grep proyecto_clima'
+        }
+        
+        failure {
+            echo '❌ Pipeline failed!'
+            
+            // Debug information
+            sh 'pwd'
+            sh 'ls -la'
+            
+            // Logs de Docker si falló
+            script {
+                try {
+                    sh 'docker logs test_container || echo "No test container found"'
+                } catch (Exception e) {
+                    echo "No Docker logs available"
+                }
+            }
+        }
+        
+        cleanup {
+            // Limpiar contenedores de test si quedaron
+            script {
+                try {
+                    sh 'docker stop test_container || echo "No container to stop"'
+                    sh 'docker rm test_container || echo "No container to remove"'
+                } catch (Exception e) {
+                    echo "Cleanup completed"
+                }
+            }
+        }
+    }
+}
