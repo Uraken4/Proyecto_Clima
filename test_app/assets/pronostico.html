@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Pronóstico del Clima</title>
+  <style>
+    body { 
+      font-family: Arial, sans-serif; 
+      background: linear-gradient(135deg, #90caf9 0%, #e3f2fd 100%);
+      margin: 0; 
+      padding: 0; 
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .container { 
+      background: #fff; 
+      border-radius: 12px; 
+      padding: 2em 2.5em; 
+      max-width: 350px; 
+      box-shadow: 0 4px 16px #90caf9aa; 
+      text-align: center;
+    }
+    h1 { 
+      color: #1976d2; 
+      margin-bottom: 0.5em;
+      font-size: 1.5em;
+    }
+    .icon {
+      font-size: 3em;
+      margin-bottom: 0.2em;
+      color: #1976d2;
+    }
+    .temp { 
+      font-size: 2.5em; 
+      font-weight: bold;
+      margin: 0.2em 0 0.1em 0;
+      color: #424242;
+    }
+    .desc { 
+      color: #555; 
+      font-size: 1.1em;
+      margin-bottom: 0.7em;
+    }
+    .city {
+      color: #1976d2;
+      font-weight: bold;
+      font-size: 1.1em;
+      margin-bottom: 0.5em;
+    }
+    .details {
+      font-size: 0.95em;
+      color: #666;
+      margin-top: 1em;
+    }
+  </style>
+  <script>
+    // Para depuración: muestra las variables recibidas
+    function debugVars() {
+      document.querySelector('.details').innerHTML = 
+        'API_KEY: ' + (window.API_KEY || '') + '<br>' +
+        'API_URL: ' + (window.API_URL || '') + '<br>' +
+        'Ciudad: ' + (window.CITY || 'Ciudad de ejemplo');
+    }
+
+    let API_KEY = window.API_KEY || '';
+    let API_URL = window.API_URL || '';
+    const CITY = window.CITY || 'Ciudad de ejemplo';
+
+    async function obtenerClima() {
+      // Mostrar variables para depuración
+      debugVars();
+
+      if (!API_KEY || !API_URL) {
+        document.querySelector('.desc').textContent = 'No se recibió API_KEY o API_URL';
+        return;
+      }
+      try {
+        const url = `${API_URL}?q=${encodeURIComponent(CITY)}&appid=${API_KEY}&units=metric&lang=es`;
+        const resp = await fetch(url);
+        if (!resp.ok) throw new Error('No se pudo obtener el clima');
+        const data = await resp.json();
+        document.querySelector('.temp').textContent = Math.round(data.main.temp) + '°C';
+        document.querySelector('.desc').textContent = data.weather[0].description;
+        document.querySelector('.city').textContent = data.name;
+        document.querySelector('.details').innerHTML =
+          `Humedad: ${data.main.humidity}%<br>Viento: ${data.wind.speed} km/h`;
+        // Cambia el icono según el clima
+        const iconMap = {
+          '01': '☀️', '02': '🌤️', '03': '☁️', '04': '☁️', '09': '🌧️', '10': '🌦️', '11': '⛈️', '13': '❄️', '50': '🌫️'
+        };
+        const iconCode = data.weather[0].icon.substring(0,2);
+        document.querySelector('.icon').textContent = iconMap[iconCode] || '🌡️';
+      } catch (e) {
+        document.querySelector('.desc').textContent = 'Error al obtener el clima';
+      }
+    }
+
+    window.onload = obtenerClima;
+  </script>
+</head>
+<body>
+  <div class="container">
+    <h1>Pronóstico del Clima</h1>
+    <div class="icon">🌤️</div>
+    <div class="temp">--°C</div>
+    <div class="desc">Cargando...</div>
+    <div class="city">Ciudad de ejemplo</div>
+    <div class="details">
+      Humedad: --%<br>
+      Viento: -- km/h
+    </div>
+  </div>
+</body>
+</html>
+    <div class="details">
+      Humedad: --%<br>
+      Viento: -- km/h
+    </div>
+  </div>
+</body>
+</html>

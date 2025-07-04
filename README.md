@@ -46,11 +46,11 @@ flutter pub get
   flutter analyze
   ```
 
-- Ejecutar la aplicación en modo desarrollo (elige el dispositivo adecuado):
+- Ejecutar la aplicación (elige el dispositivo adecuado):
   ```sh
-  flutter run -d linux      # Para Linux
-  flutter run -d chrome     # Para Web
-  flutter run -d android    # Para Android (requiere emulador/dispositivo)
+  flutter run -d linux      # Linux
+  flutter run -d chrome     # Web
+  flutter run -d android    # Android (requiere emulador/dispositivo)
   ```
 
 - Compilar APK para Android:
@@ -69,3 +69,25 @@ El proyecto incluye un `Jenkinsfile` para integración continua usando Flutter.
 ## Contribuciones
 
 ¡Pull requests y sugerencias son bienvenidas!
+
+## Nota importante
+
+Para ejecutar cualquier comando de Flutter (como `flutter run`, `flutter test`, etc.), asegúrate de estar ubicado en el directorio raíz del proyecto Flutter, donde se encuentra el archivo `pubspec.yaml`.  
+En este caso, navega a la carpeta `test_app` antes de ejecutar los comandos:
+
+```sh
+cd test_app
+```
+
+Luego puedes ejecutar los comandos como:
+
+```sh
+flutter pub get
+flutter run -d linux
+flutter test
+```
+
+## ¿Qué hace `flutter pub get`?
+
+El comando `flutter pub get` descarga e instala todas las dependencias listadas en el archivo `pubspec.yaml` del proyecto.  
+Esto asegura que todas las librerías necesarias estén disponibles para compilar y ejecutar la aplicación Flutter.

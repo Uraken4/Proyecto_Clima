@@ -65,6 +65,13 @@ class HomeScreen extends StatelessWidget {
                   const SizedBox(height: 16),
                   if (weatherProvider.dailyForecast != null)
                     ForecastList(forecast: weatherProvider.dailyForecast!),
+                  const SizedBox(height: 16),
+                  ElevatedButton(
+                    onPressed: () {
+                      Navigator.pushNamed(context, '/html-weather');
+                    },
+                    child: const Text('Ver pronóstico HTML'),
+                  ),
                 ],
               ),
             ),
@@ -73,4 +80,4 @@ class HomeScreen extends StatelessWidget {
       ),
     );
   }
-} 
+}

@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'providers/weather_provider.dart';
 import 'screens/home_screen.dart';
+import 'screens/html_weather_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -40,6 +41,9 @@ class MyApp extends StatelessWidget {
           useMaterial3: true,
         ),
         home: const HomeScreen(),
+        routes: {
+          '/html-weather': (context) => const HtmlWeatherScreen(),
+        },
       ),
     );
   }
