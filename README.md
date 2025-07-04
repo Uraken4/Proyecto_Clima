@@ -58,18 +58,6 @@ flutter pub get
   flutter build apk --debug
   ```
 
-## Variables de entorno
-
-Crea un archivo `.env` en la raíz del proyecto con tus claves necesarias.
-
-## CI/CD
-
-El proyecto incluye un `Jenkinsfile` para integración continua usando Flutter.
-
-## Contribuciones
-
-¡Pull requests y sugerencias son bienvenidas!
-
 ## Nota importante
 
 Para ejecutar cualquier comando de Flutter (como `flutter run`, `flutter test`, etc.), asegúrate de estar ubicado en el directorio raíz del proyecto Flutter, donde se encuentra el archivo `pubspec.yaml`.  
